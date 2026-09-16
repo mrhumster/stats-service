@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stats-reader
+  namespace: go-app
+spec:
+  type: ClusterIP
+  selector:
+    app: stats-reader
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
