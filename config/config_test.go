@@ -16,6 +16,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	require.Equal(t, "stats", cfg.Database.Name)
 	require.Equal(t, "localhost", cfg.Database.Host)
 	require.Equal(t, 3, cfg.Redis.QueueDB)
+	require.Equal(t, 4, cfg.Redis.ViewsDB)
 	require.Equal(t, "http://stream-service:80", cfg.Stream.BaseURL)
 }
 
@@ -26,6 +27,7 @@ func TestLoadConfig_ReadsEnv(t *testing.T) {
 	t.Setenv("DB_NAME", "gpdb")
 	t.Setenv("CORS_ALLOW_ORIGINS", "https://a.com, https://b.com,")
 	t.Setenv("REDIS_QUEUE_DB", "7")
+	t.Setenv("REDIS_VIEWS_DB", "9")
 	t.Setenv("STREAM_SERVICE_URL", "http://stream:8080")
 
 	cfg, err := config.LoadConfig()
@@ -37,5 +39,6 @@ func TestLoadConfig_ReadsEnv(t *testing.T) {
 	require.Equal(t, "gpdb", cfg.Database.Name)
 	require.Equal(t, []string{"https://a.com", "https://b.com"}, cfg.Server.AllowedOrigins)
 	require.Equal(t, 7, cfg.Redis.QueueDB)
+	require.Equal(t, 9, cfg.Redis.ViewsDB)
 	require.Equal(t, "http://stream:8080", cfg.Stream.BaseURL)
 }

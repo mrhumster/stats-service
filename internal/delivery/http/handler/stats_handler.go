@@ -79,21 +79,34 @@ func (h *StatsHandler) SetReaction(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// RegisterView bumps the anonymous per-stream view counter. Public endpoint
-// (stream gate enforced in the service layer).
+// RegisterView bumps the per-stream view counter once per viewer within the
+// dedup window. Public endpoint (stream gate enforced in the service layer);
+// an OptionalAuthMiddleware identifies the viewer: signed-in users dedup by
+// account, guests by client IP.
 func (h *StatsHandler) RegisterView(c *gin.Context) {
 	streamID, ok := parseUUID(c, c.Param("streamId"))
 	if !ok {
 		return
 	}
 
-	if err := h.svc.RegisterView(c.Request.Context(), streamID); err != nil {
+	viewerKey := guestViewerKey(c)
+	if middleware.Claims(c) != nil {
+		viewerKey = "u:" + middleware.Actor(c).UserID.String()
+	}
+
+	if err := h.svc.RegisterView(c.Request.Context(), streamID, viewerKey); err != nil {
 		writeServiceError(c, err)
 		return
 	}
 
 	metrics.View("success")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// guestViewerKey dedupes anonymous viewers by their client IP. Behind traefik
+// gin resolves the real peer from X-Forwarded-For.
+func guestViewerKey(c *gin.Context) string {
+	return "ip:" + c.ClientIP()
 }
 
 func writeServiceError(c *gin.Context, err error) {

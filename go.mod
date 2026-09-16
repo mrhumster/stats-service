@@ -11,6 +11,7 @@ require (
 	github.com/hibiken/asynq v0.26.0
 	github.com/mrhumster/identity-service v0.2.1
 	github.com/prometheus/client_golang v1.24.1
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
 	gorm.io/driver/postgres v1.6.0
@@ -51,7 +52,6 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.55.0 // indirect
-	github.com/redis/go-redis/v9 v9.18.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

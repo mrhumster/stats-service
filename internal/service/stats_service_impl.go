@@ -11,12 +11,14 @@ import (
 	"github.com/mrhumster/stats-service/internal/queue"
 	"github.com/mrhumster/stats-service/internal/repository"
 	"github.com/mrhumster/stats-service/internal/stream"
+	"github.com/mrhumster/stats-service/internal/viewer"
 )
 
 type StatsServiceImpl struct {
 	repo         repository.StatsRepository
 	recorder     queue.ActivityEventRecorder
 	streamStatus stream.StatusClient
+	viewDeduper  viewer.Deduper
 }
 
 func NewStatsServiceImpl(repo repository.StatsRepository) *StatsServiceImpl {
@@ -29,6 +31,10 @@ func (s *StatsServiceImpl) WithActivityRecorder(r queue.ActivityEventRecorder) {
 
 func (s *StatsServiceImpl) WithStreamStatusClient(c stream.StatusClient) {
 	s.streamStatus = c
+}
+
+func (s *StatsServiceImpl) WithViewDeduper(d viewer.Deduper) {
+	s.viewDeduper = d
 }
 
 func (s *StatsServiceImpl) GetStats(ctx context.Context, streamID uuid.UUID, actor *Actor) (*models.Stats, error) {
@@ -114,10 +120,23 @@ func (s *StatsServiceImpl) SetReaction(ctx context.Context, actor Actor, streamI
 	return stats, nil
 }
 
-func (s *StatsServiceImpl) RegisterView(ctx context.Context, streamID uuid.UUID) error {
+func (s *StatsServiceImpl) RegisterView(ctx context.Context, streamID uuid.UUID, viewerKey string) error {
 	if _, err := s.checkStreamCommentable(ctx, streamID); err != nil {
 		return err
 	}
+
+	// Dedup by viewer: once per window the counter is bumped, otherwise the
+	// request is silently accepted. An unavailable deduper fails open (view
+	// still counts, dedup degraded) so the counter never breaks.
+	if s.viewDeduper != nil {
+		allowed, err := s.viewDeduper.Allow(ctx, streamID, viewerKey)
+		if err != nil {
+			slog.Warn("view dedup unavailable, failing open", "stream_id", streamID, "error", err)
+		} else if !allowed {
+			return nil
+		}
+	}
+
 	return s.repo.IncrementViews(ctx, streamID, time.Now().UTC())
 }
 

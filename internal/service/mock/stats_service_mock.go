@@ -59,17 +59,17 @@ func (mr *MockStatsServiceMockRecorder) GetStats(ctx, streamID, actor any) *gomo
 }
 
 // RegisterView mocks base method.
-func (m *MockStatsService) RegisterView(ctx context.Context, streamID uuid.UUID) error {
+func (m *MockStatsService) RegisterView(ctx context.Context, streamID uuid.UUID, viewerKey string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterView", ctx, streamID)
+	ret := m.ctrl.Call(m, "RegisterView", ctx, streamID, viewerKey)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RegisterView indicates an expected call of RegisterView.
-func (mr *MockStatsServiceMockRecorder) RegisterView(ctx, streamID any) *gomock.Call {
+func (mr *MockStatsServiceMockRecorder) RegisterView(ctx, streamID, viewerKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterView", reflect.TypeOf((*MockStatsService)(nil).RegisterView), ctx, streamID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterView", reflect.TypeOf((*MockStatsService)(nil).RegisterView), ctx, streamID, viewerKey)
 }
 
 // SetReaction mocks base method.

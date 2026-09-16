@@ -126,7 +126,7 @@ func TestRegisterViewOK(t *testing.T) {
 	defer ctrl.Finish()
 
 	streamID := uuid.New()
-	svc.EXPECT().RegisterView(gomock.Any(), streamID).Return(nil)
+	svc.EXPECT().RegisterView(gomock.Any(), streamID, "ip:192.0.2.1").Return(nil)
 
 	w := do("POST", "/streams/"+streamID.String()+"/views", svc)
 	if w.Code != http.StatusOK {

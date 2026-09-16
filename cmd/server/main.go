@@ -19,6 +19,7 @@ import (
 	"github.com/mrhumster/stats-service/internal/repository"
 	"github.com/mrhumster/stats-service/internal/service"
 	"github.com/mrhumster/stats-service/internal/stream"
+	"github.com/mrhumster/stats-service/internal/viewer"
 )
 
 var (
@@ -59,10 +60,18 @@ func main() {
 		}
 	}()
 
+	viewDeduper := viewer.NewRedisDeduper(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.ViewsDB)
+	defer func() {
+		if err := viewDeduper.Close(); err != nil {
+			log.Printf("close view deduper: %v", err)
+		}
+	}()
+
 	repo := repository.NewGormStatsRepository(db)
 	svc := service.NewStatsServiceImpl(repo)
 	svc.WithActivityRecorder(recorder)
 	svc.WithStreamStatusClient(stream.NewHTTPStatusClient(cfg.Stream.BaseURL))
+	svc.WithViewDeduper(viewDeduper)
 
 	r := routes.SetupRoutes(db, cfg, svc, tokens)
 

@@ -32,6 +32,7 @@ type StatsService interface {
 	// SetReaction upserts the actor's like/dislike (or removes it with "none")
 	// and emits a reaction.* activity event to the stream owner.
 	SetReaction(ctx context.Context, actor Actor, streamID uuid.UUID, kind models.ReactionKind) (*models.Stats, error)
-	// RegisterView bumps the anonymous per-stream view counter.
-	RegisterView(ctx context.Context, streamID uuid.UUID) error
+	// RegisterView bumps the per-stream view counter once per viewer within
+	// the dedup window (viewer is userID when authed, else the client IP).
+	RegisterView(ctx context.Context, streamID uuid.UUID, viewerKey string) error
 }

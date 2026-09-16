@@ -11,6 +11,7 @@ import (
 	repomock "github.com/mrhumster/stats-service/internal/repository/mock"
 	"github.com/mrhumster/stats-service/internal/stream"
 	streammock "github.com/mrhumster/stats-service/internal/stream/mock"
+	viewermock "github.com/mrhumster/stats-service/internal/viewer/mock"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -234,7 +235,7 @@ func TestRegisterView_GateAndIncrement(t *testing.T) {
 		svc, repo, _ := newTestService(t)
 		streamID := uuid.New()
 		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Return(nil)
-		require.NoError(t, svc.RegisterView(context.Background(), streamID))
+		require.NoError(t, svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1"))
 	})
 
 	t.Run("published private rejected", func(t *testing.T) {
@@ -242,9 +243,45 @@ func TestRegisterView_GateAndIncrement(t *testing.T) {
 		streamID := uuid.New()
 		sclient.EXPECT().GetStreamStatus(gomock.Any(), streamID).
 			Return(&stream.StatusInfo{Status: "published", Visibility: "private", OwnerID: uuid.New()}, nil)
-		err := svc.RegisterView(context.Background(), streamID)
+		err := svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1")
 		require.ErrorIs(t, err, ErrStreamNotPublished)
 	})
+}
+
+func TestRegisterView_DedupByViewer(t *testing.T) {
+	t.Run("first view in window increments", func(t *testing.T) {
+		svc, repo, deduper := newDedupTestService(t)
+		streamID := uuid.New()
+		deduper.EXPECT().Allow(gomock.Any(), streamID, "u:abc").Return(true, nil)
+		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Return(nil)
+		require.NoError(t, svc.RegisterView(context.Background(), streamID, "u:abc"))
+	})
+
+	t.Run("repeated view is silently skipped", func(t *testing.T) {
+		svc, repo, deduper := newDedupTestService(t)
+		streamID := uuid.New()
+		deduper.EXPECT().Allow(gomock.Any(), streamID, "ip:192.0.2.1").Return(false, nil)
+		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Times(0)
+		require.NoError(t, svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1"))
+	})
+
+	t.Run("deduper error fails open", func(t *testing.T) {
+		svc, repo, deduper := newDedupTestService(t)
+		streamID := uuid.New()
+		deduper.EXPECT().Allow(gomock.Any(), streamID, "ip:192.0.2.1").Return(false, errors.New("redis down"))
+		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Return(nil)
+		require.NoError(t, svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1"))
+	})
+}
+
+// newDedupTestService is newTestService plus a wired viewer deduper mock.
+func newDedupTestService(t *testing.T) (*StatsServiceImpl, *repomock.MockStatsRepository, *viewermock.MockDeduper) {
+	t.Helper()
+	svc, repo, _ := newTestService(t)
+	ctrl := gomock.NewController(t)
+	deduper := viewermock.NewMockDeduper(ctrl)
+	svc.WithViewDeduper(deduper)
+	return svc, repo, deduper
 }
 
 func TestGetStats(t *testing.T) {

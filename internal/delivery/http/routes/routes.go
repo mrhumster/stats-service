@@ -39,9 +39,10 @@ func SetupRoutes(db *gorm.DB, cfg *config.Config, svc service.StatsService, toke
 	h := handler.NewStatsHandler(svc)
 
 	// Public read/views. my_reaction is attached when a valid Bearer token
-	// is supplied (OptionalAuthMiddleware).
+	// is supplied (OptionalAuthMiddleware); the same middleware picks the
+	// viewer identity (user id vs IP) for the per-viewer dedup on views.
 	r.GET("/streams/:streamId/stats", middleware.OptionalAuthMiddleware(tokens), h.GetStats)
-	r.POST("/streams/:streamId/views", h.RegisterView)
+	r.POST("/streams/:streamId/views", middleware.OptionalAuthMiddleware(tokens), h.RegisterView)
 
 	authed := r.Group("", middleware.AuthMiddleware(tokens))
 	{
