@@ -122,6 +122,9 @@ func writeServiceError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrStreamUnavailable):
 		slog.Error("stream service unavailable", "error", err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "internal server error"})
+	case errors.Is(err, service.ErrViewDedupUnavailable):
+		slog.Error("view dedup unavailable", "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "internal server error"})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 	}

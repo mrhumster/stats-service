@@ -20,6 +20,15 @@ type Server struct {
 	Mode           string
 	AllowedOrigins []string
 	MetricsAddr    string
+	// TrustedProxies are the reverse proxies (traefik etc.) whose forwarded
+	// headers are honored by ClientIP(). Empty means no proxy is trusted, so
+	// ClientIP() returns the direct TCP peer and spoofed X-Forwarded-For is
+	// ignored — the honest default for view dedup.
+	TrustedProxies []string
+	// ViewRateLimitPerMin caps POST /views requests per viewer key (IP or
+	// user id) per minute. A backstop against burst flooding; the per-viewer
+	// 24h dedup remains the primary inflation defense.
+	ViewRateLimitPerMin int
 }
 
 // Stream is the internal stream-service client used to resolve stream
@@ -61,6 +70,10 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("views dedup DB: parse REDIS_VIEWS_DB: %w", err)
 	}
+	viewsRateLimit, err := strconv.ParseUint(getEnv("VIEWS_RATE_LIMIT", "300"), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("views rate limit: parse VIEWS_RATE_LIMIT: %w", err)
+	}
 
 	return &Config{
 		Database: Database{
@@ -73,10 +86,12 @@ func LoadConfig() (*Config, error) {
 			TimeZone: "UTC",
 		},
 		Server: Server{
-			ServerAddr:     getEnv("SERVER_ADDR", ":8080"),
-			Mode:           getEnv("MODE", "debug"),
-			AllowedOrigins: commaSplit(getEnv("CORS_ALLOW_ORIGINS", "http://localhost:5173,https://example.com,https://stats.example.com")),
-			MetricsAddr:    getEnv("METRICS_ADDR", ""),
+			ServerAddr:          getEnv("SERVER_ADDR", ":8080"),
+			Mode:                getEnv("MODE", "debug"),
+			AllowedOrigins:      commaSplit(getEnv("CORS_ALLOW_ORIGINS", "http://localhost:5173,https://example.com,https://stats.example.com")),
+			MetricsAddr:         getEnv("METRICS_ADDR", ""),
+			TrustedProxies:      commaSplit(getEnv("TRUSTED_PROXIES", "")),
+			ViewRateLimitPerMin: int(viewsRateLimit),
 		},
 		JWT: JWT{
 			AccessPublicKeyURL: os.Getenv("JWT_ACCESS_PUBLIC_KEY_URL"),

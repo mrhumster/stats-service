@@ -265,12 +265,13 @@ func TestRegisterView_DedupByViewer(t *testing.T) {
 		require.NoError(t, svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1"))
 	})
 
-	t.Run("deduper error fails open", func(t *testing.T) {
+	t.Run("deduper error fails closed", func(t *testing.T) {
 		svc, repo, deduper := newDedupTestService(t)
 		streamID := uuid.New()
 		deduper.EXPECT().Allow(gomock.Any(), streamID, "ip:192.0.2.1").Return(false, errors.New("redis down"))
-		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Return(nil)
-		require.NoError(t, svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1"))
+		repo.EXPECT().IncrementViews(gomock.Any(), streamID, gomock.Any()).Times(0)
+		err := svc.RegisterView(context.Background(), streamID, "ip:192.0.2.1")
+		require.ErrorIs(t, err, ErrViewDedupUnavailable)
 	})
 }
 
@@ -311,5 +312,50 @@ func TestGetStats(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, stats.MyReaction)
 		require.Equal(t, int64(12), stats.Views)
+	})
+}
+
+func TestGetStats_StreamGate(t *testing.T) {
+	t.Run("private stream stats blocked", func(t *testing.T) {
+		svc, _, _, sclient := newGateTestService(t)
+		streamID := uuid.New()
+		sclient.EXPECT().GetStreamStatus(gomock.Any(), streamID).
+			Return(&stream.StatusInfo{Status: "published", Visibility: "private", OwnerID: uuid.New()}, nil)
+		_, err := svc.GetStats(context.Background(), streamID, nil)
+		require.ErrorIs(t, err, ErrStreamNotPublished)
+	})
+
+	t.Run("draft stream stats blocked", func(t *testing.T) {
+		svc, _, _, sclient := newGateTestService(t)
+		streamID := uuid.New()
+		sclient.EXPECT().GetStreamStatus(gomock.Any(), streamID).
+			Return(&stream.StatusInfo{Status: "draft", Visibility: "public", OwnerID: uuid.New()}, nil)
+		_, err := svc.GetStats(context.Background(), streamID, nil)
+		require.ErrorIs(t, err, ErrStreamNotPublished)
+	})
+
+	t.Run("stream not found", func(t *testing.T) {
+		svc, _, _, sclient := newGateTestService(t)
+		streamID := uuid.New()
+		sclient.EXPECT().GetStreamStatus(gomock.Any(), streamID).Return(nil, stream.ErrStreamNotFound)
+		_, err := svc.GetStats(context.Background(), streamID, nil)
+		require.ErrorIs(t, err, ErrStreamNotFound)
+	})
+
+	t.Run("stream service down fails closed", func(t *testing.T) {
+		svc, _, _, sclient := newGateTestService(t)
+		streamID := uuid.New()
+		sclient.EXPECT().GetStreamStatus(gomock.Any(), streamID).Return(nil, errors.New("dial tcp: refused"))
+		_, err := svc.GetStats(context.Background(), streamID, nil)
+		require.ErrorIs(t, err, ErrStreamUnavailable)
+	})
+
+	t.Run("no client fails closed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		repo := repomock.NewMockStatsRepository(ctrl)
+		svc := NewStatsServiceImpl(repo)
+		_, err := svc.GetStats(context.Background(), uuid.New(), nil)
+		require.ErrorIs(t, err, ErrStreamUnavailable)
 	})
 }

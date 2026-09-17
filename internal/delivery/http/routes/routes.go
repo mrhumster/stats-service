@@ -28,6 +28,12 @@ func SetupRoutes(db *gorm.DB, cfg *config.Config, svc service.StatsService, toke
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		// Invalid config should not silently re-enable spoofable ClientIP;
+		// trust none (direct peer only) and surface the misconfiguration.
+		log.Printf("trusted proxies: %v", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(middleware.MetricsMiddleware())
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.Server.AllowedOrigins,
@@ -42,7 +48,10 @@ func SetupRoutes(db *gorm.DB, cfg *config.Config, svc service.StatsService, toke
 	// is supplied (OptionalAuthMiddleware); the same middleware picks the
 	// viewer identity (user id vs IP) for the per-viewer dedup on views.
 	r.GET("/streams/:streamId/stats", middleware.OptionalAuthMiddleware(tokens), h.GetStats)
-	r.POST("/streams/:streamId/views", middleware.OptionalAuthMiddleware(tokens), h.RegisterView)
+	r.POST("/streams/:streamId/views",
+		middleware.OptionalAuthMiddleware(tokens),
+		middleware.RateLimitPerMin(cfg.Server.ViewRateLimitPerMin),
+		h.RegisterView)
 
 	authed := r.Group("", middleware.AuthMiddleware(tokens))
 	{

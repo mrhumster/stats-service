@@ -38,6 +38,14 @@ func (s *StatsServiceImpl) WithViewDeduper(d viewer.Deduper) {
 }
 
 func (s *StatsServiceImpl) GetStats(ctx context.Context, streamID uuid.UUID, actor *Actor) (*models.Stats, error) {
+	// Engagement counters are gated the same way as writes: only published
+	// non-private streams expose views/likes/dislikes. Keeps private/draft
+	// activity from leaking and stops the endpoint doubling as an existence
+	// oracle for arbitrary stream UUIDs.
+	if _, err := s.checkStreamCommentable(ctx, streamID); err != nil {
+		return nil, err
+	}
+
 	likes, dislikes, err := s.repo.Counts(ctx, streamID)
 	if err != nil {
 		return nil, err
@@ -126,13 +134,16 @@ func (s *StatsServiceImpl) RegisterView(ctx context.Context, streamID uuid.UUID,
 	}
 
 	// Dedup by viewer: once per window the counter is bumped, otherwise the
-	// request is silently accepted. An unavailable deduper fails open (view
-	// still counts, dedup degraded) so the counter never breaks.
+	// request is silently accepted. The deduper FAILS CLOSED: if Redis is
+	// unavailable the view is not counted, so an outage can never turn into
+	// unlimited inflation the way a fail-open would.
 	if s.viewDeduper != nil {
 		allowed, err := s.viewDeduper.Allow(ctx, streamID, viewerKey)
 		if err != nil {
-			slog.Warn("view dedup unavailable, failing open", "stream_id", streamID, "error", err)
-		} else if !allowed {
+			slog.Error("view dedup unavailable, failing closed", "stream_id", streamID, "error", err)
+			return ErrViewDedupUnavailable
+		}
+		if !allowed {
 			return nil
 		}
 	}

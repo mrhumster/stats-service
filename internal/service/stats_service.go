@@ -15,6 +15,7 @@ var (
 	ErrStreamNotPublished  = errors.New("stream is not published")
 	ErrStreamUnavailable   = errors.New("stream service unavailable")
 	ErrInvalidReactionKind = errors.New("invalid reaction kind")
+	ErrViewDedupUnavailable = errors.New("view dedup unavailable")
 )
 
 // Actor is the authenticated caller: user identity plus JWT claims used by
