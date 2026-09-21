@@ -29,6 +29,10 @@ type Server struct {
 	// user id) per minute. A backstop against burst flooding; the per-viewer
 	// 24h dedup remains the primary inflation defense.
 	ViewRateLimitPerMin int
+	// ReactionRateLimitPerMin caps PUT reactions per user per minute. The
+	// same in-memory fixed window as views; reaction storms (already
+	// deduped by kind change logic) get a second, cheap backstop.
+	ReactionRateLimitPerMin int
 }
 
 // Stream is the internal stream-service client used to resolve stream
@@ -74,6 +78,10 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("views rate limit: parse VIEWS_RATE_LIMIT: %w", err)
 	}
+	reactionRateLimit, err := strconv.ParseUint(getEnv("REACTION_RATE_LIMIT", "30"), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("reaction rate limit: parse REACTION_RATE_LIMIT: %w", err)
+	}
 
 	return &Config{
 		Database: Database{
@@ -91,7 +99,8 @@ func LoadConfig() (*Config, error) {
 			AllowedOrigins:      commaSplit(getEnv("CORS_ALLOW_ORIGINS", "http://localhost:5173,https://example.com,https://stats.example.com")),
 			MetricsAddr:         getEnv("METRICS_ADDR", ""),
 			TrustedProxies:      commaSplit(getEnv("TRUSTED_PROXIES", "")),
-			ViewRateLimitPerMin: int(viewsRateLimit),
+			ViewRateLimitPerMin:     int(viewsRateLimit),
+			ReactionRateLimitPerMin: int(reactionRateLimit),
 		},
 		JWT: JWT{
 			AccessPublicKeyURL: os.Getenv("JWT_ACCESS_PUBLIC_KEY_URL"),

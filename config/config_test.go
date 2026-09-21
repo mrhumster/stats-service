@@ -20,6 +20,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	require.Equal(t, "http://stream-service:80", cfg.Stream.BaseURL)
 	require.Empty(t, cfg.Server.TrustedProxies)
 	require.Equal(t, 300, cfg.Server.ViewRateLimitPerMin)
+	require.Equal(t, 30, cfg.Server.ReactionRateLimitPerMin)
 }
 
 func TestLoadConfig_ReadsEnv(t *testing.T) {
@@ -33,6 +34,7 @@ func TestLoadConfig_ReadsEnv(t *testing.T) {
 	t.Setenv("STREAM_SERVICE_URL", "http://stream:8080")
 	t.Setenv("TRUSTED_PROXIES", "10.42.0.1, 10.42.0.0/16")
 	t.Setenv("VIEWS_RATE_LIMIT", "120")
+	t.Setenv("REACTION_RATE_LIMIT", "25")
 
 	cfg, err := config.LoadConfig()
 	require.NoError(t, err)
@@ -47,4 +49,5 @@ func TestLoadConfig_ReadsEnv(t *testing.T) {
 	require.Equal(t, "http://stream:8080", cfg.Stream.BaseURL)
 	require.Equal(t, []string{"10.42.0.1", "10.42.0.0/16"}, cfg.Server.TrustedProxies)
 	require.Equal(t, 120, cfg.Server.ViewRateLimitPerMin)
+	require.Equal(t, 25, cfg.Server.ReactionRateLimitPerMin)
 }

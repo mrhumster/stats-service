@@ -55,7 +55,9 @@ func SetupRoutes(db *gorm.DB, cfg *config.Config, svc service.StatsService, toke
 
 	authed := r.Group("", middleware.AuthMiddleware(tokens))
 	{
-		authed.PUT("/streams/:streamId/reaction", h.SetReaction)
+		authed.PUT("/streams/:streamId/reaction",
+			middleware.RateLimitPerMin(cfg.Server.ReactionRateLimitPerMin),
+			h.SetReaction)
 	}
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
