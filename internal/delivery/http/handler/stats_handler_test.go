@@ -66,6 +66,42 @@ func TestGetStatsInvalidStreamID(t *testing.T) {
 	}
 }
 
+// GetStats gates on the same stream check as writes, so an unpublished stream is
+// a normal 403 — not a 500. TestWriteServiceErrors below covers the mapper
+// itself; this covers the handler actually routing through it, which is what
+// regressed.
+func TestGetStatsMapsServiceErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code int
+		body string
+	}{
+		{"stream not published", service.ErrStreamNotPublished, http.StatusForbidden, "stream is not published"},
+		{"stream not found", service.ErrStreamNotFound, http.StatusNotFound, "stream not found"},
+		{"stream unavailable", service.ErrStreamUnavailable, http.StatusServiceUnavailable, "internal server error"},
+		{"unknown", errors.New("boom"), http.StatusInternalServerError, "internal server error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := svcmock.NewMockStatsService(ctrl)
+			defer ctrl.Finish()
+
+			streamID := uuid.New()
+			svc.EXPECT().GetStats(gomock.Any(), streamID, gomock.Any()).Return(nil, tc.err)
+
+			w := do("GET", "/streams/"+streamID.String()+"/stats", svc)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d: %s", tc.code, w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.body) {
+				t.Errorf("missing body text: %s", w.Body.String())
+			}
+		})
+	}
+}
+
 func TestSetReactionUnverified(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	svc := svcmock.NewMockStatsService(ctrl)

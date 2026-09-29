@@ -43,7 +43,12 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.svc.GetStats(c.Request.Context(), streamID, actor)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		// Gate failures (not published / not found / stream service down) are
+		// business states, not server faults. SetReaction and RegisterView
+		// already map them; returning a blanket 500 here made every preview of
+		// an unpublished stream look like a crash, and inflated the 5xx ratio
+		// the GoCastHigh5xxRate alert watches.
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, stats)
